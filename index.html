@@ -1,186 +1,145 @@
+from openpyxl import Workbook
+from openpyxl.styles import Font
+from openpyxl.chart import LineChart, Reference
+from openpyxl.utils import get_column_letter
+
+wb = Workbook()
+data_sheet = wb.active
+data_sheet.title = "Trade_Data"
+dashboard = wb.create_sheet("Dashboard")
+capital_sheet = wb.create_sheet("Capital_Tracking")
+
+headers = [
+    "Date","Instrument","Setup","Entry","StopLoss","Exit",
+    "Risk_Amount","P&L","R_Multiple","Account_Capital","Mistake"
+]
+data_sheet.append(headers)
+
+for col in range(1, len(headers)+1):
+    data_sheet.cell(row=1,column=col).font = Font(bold=True)
+
+# Add R formula for 200 rows
+for row in range(2,202):
+    data_sheet[f"I{row}"] = f"=IF(G{row}=0,0,H{row}/G{row})"
+
+# Dashboard Metrics
+dashboard["A1"]="Total Trades"
+dashboard["B1"]="=COUNTA(Trade_Data!A2:A200)"
+
+dashboard["A2"]="Net P&L"
+dashboard["B2"]="=SUM(Trade_Data!H2:H200)"
+
+dashboard["A3"]="Total R"
+dashboard["B3"]="=SUM(Trade_Data!I2:I200)"
+
+dashboard["A4"]="Win Rate"
+dashboard["B4"]="=IF(B1=0,0,COUNTIF(Trade_Data!I2:I200,\">0\")/B1)"
+
+for r in range(1,5):
+    dashboard[f"A{r}"].font=Font(bold=True)
+
+# Equity Curve
+dashboard["D1"]="Equity Curve"
+dashboard["D2"]="=Trade_Data!H2"
+for i in range(3,202):
+    dashboard[f"D{i}"]=f"=D{i-1}+Trade_Data!H{i}"
+
+chart = LineChart()
+chart.title="Equity Curve"
+data = Reference(dashboard,min_col=4,min_row=2,max_row=50)
+chart.add_data(data)
+dashboard.add_chart(chart,"F2")
+
+# Capital Tracking
+capital_sheet["A1"]="Starting Capital"
+capital_sheet["B1"]=100000
+
+capital_sheet["A3"]="Current Capital"
+capital_sheet["B3"]="=B1+SUM(Trade_Data!H2:H200)"
+
+capital_sheet["A5"]="Growth %"
+capital_sheet["B5"]="=IF(B1=0,0,(B3-B1)/B1)"
+
+for cell in ["A1","A3","A5"]:
+    capital_sheet[cell].font=Font(bold=True)
+
+excel_path="/mnt/data/Ajay_Trading_Journal_Pro_V2.xlsx"
+wb.save(excel_path)
+
+
+# Create Personal Web App (Responsive Light Theme)
+
+html_content = """
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Zella Pro Journal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root { --bg: #09090b; --card: #18181b; --border: #27272a; --accent: #a78bfa; }
-        body { background-color: var(--bg); color: #ececec; font-family: 'Segoe UI', Roboto, sans-serif; }
-        .zella-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
-        .stat-label { color: #71717a; font-size: 0.75rem; text-transform: uppercase; font-weight: 600; }
-        input, select, textarea { background: #27272a !important; border: 1px solid #3f3f46 !important; color: white; padding: 10px; border-radius: 8px; width: 100%; margin-bottom: 12px; }
-        .btn-primary { background: var(--accent); color: black; font-weight: bold; padding: 12px; border-radius: 8px; width: 100%; transition: 0.2s; }
-        .tab-active { color: var(--accent); border-bottom: 2px solid var(--accent); }
-    </style>
+<title>Ajay Trading Journal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {font-family: Arial; background:#f4f6f9; margin:20px;}
+.card {background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+input {padding:8px; margin:5px 0; width:100%;}
+button {padding:10px; width:100%;}
+h2 {margin-top:0;}
+</style>
 </head>
-<body class="pb-24">
+<body>
 
-    <div class="p-6 flex justify-between items-center border-b border-gray-800 sticky top-0 bg-black z-50">
-        <h1 class="text-xl font-bold tracking-tight">Dashboard <span class="text-purple-500">.</span></h1>
-        <button onclick="toggleForm()" class="bg-white text-black px-4 py-1 rounded-full text-sm font-bold">+ New Trade</button>
-    </div>
+<h1>Ajay Personal Trading Journal</h1>
 
-    <div id="main-content" class="p-4">
-        <div class="grid grid-cols-2 gap-4 mb-6">
-            <div class="zella-card p-4">
-                <p class="stat-label">Net P&L</p>
-                <p id="netPl" class="text-2xl font-bold text-green-400">$0.00</p>
-            </div>
-            <div class="zella-card p-4">
-                <p class="stat-label">Avg R-Multiple</p>
-                <p id="avgR" class="text-2xl font-bold text-blue-400">0.0R</p>
-            </div>
-        </div>
+<div class="card">
+<h2>Add Trade</h2>
+<input id="entry" placeholder="Entry Price">
+<input id="sl" placeholder="Stop Loss">
+<input id="exit" placeholder="Exit Price">
+<input id="risk" placeholder="Risk Amount">
+<button onclick="addTrade()">Add Trade</button>
+</div>
 
-        <div class="zella-card p-4 mb-6">
-            <p class="stat-label mb-4">Equity Curve</p>
-            <canvas id="equityChart" height="180"></canvas>
-        </div>
+<div class="card">
+<h2>Dashboard</h2>
+<p>Total Trades: <span id="total">0</span></p>
+<p>Total P&L: ₹<span id="pnl">0</span></p>
+<p>Total R: <span id="totalR">0</span></p>
+<p>Capital: ₹<span id="capital">100000</span></p>
+</div>
 
-        <h2 class="font-bold mb-4 ml-1">Recent Executions</h2>
-        <div id="tradeContainer" class="space-y-3">
-            </div>
-    </div>
+<script>
+let trades = [];
+let startingCapital = 100000;
 
-    <div id="tradeModal" class="fixed inset-0 bg-black p-6 z-[100] hidden overflow-y-auto">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-bold">Log execution</h2>
-            <button onclick="toggleForm()" class="text-gray-400">Close</button>
-        </div>
-        
-        <label class="text-xs font-bold text-gray-400">Symbol & Setup</label>
-        <input type="text" id="symbol" placeholder="e.g. NVDA or EURUSD">
-        <select id="setup">
-            <option value="Breakout">Breakout</option>
-            <option value="Mean Reversion">Mean Reversion</option>
-            <option value="Gap Fill">Gap Fill</option>
-        </select>
+function addTrade(){
+    let entry = parseFloat(document.getElementById("entry").value);
+    let sl = parseFloat(document.getElementById("sl").value);
+    let exit = parseFloat(document.getElementById("exit").value);
+    let risk = parseFloat(document.getElementById("risk").value);
 
-        <label class="text-xs font-bold text-gray-400">Trade Logic ($)</label>
-        <div class="grid grid-cols-2 gap-2">
-            <input type="number" id="entry" placeholder="Entry Price">
-            <input type="number" id="exit" placeholder="Exit Price">
-            <input type="number" id="stop" placeholder="Stop Loss">
-            <input type="number" id="size" placeholder="Quantity/Size">
-        </div>
+    let pnl = (exit - entry) * (risk/(entry-sl));
+    let R = pnl / risk;
 
-        <label class="text-xs font-bold text-gray-400">Screenshot</label>
-        <input type="file" id="imageInput" accept="image/*" class="text-sm">
-        
-        <button onclick="saveTrade()" class="btn-primary mt-4">Save Execution</button>
-    </div>
+    trades.push({pnl:pnl,R:R});
 
-    <div class="fixed bottom-0 w-full bg-black border-t border-gray-800 flex justify-around p-4 text-[10px] uppercase font-bold tracking-widest text-gray-500">
-        <div class="tab-active text-center">📊<br>Dash</div>
-        <div class="text-center">📓<br>Notes</div>
-        <div class="text-center">🎯<br>Playbook</div>
-        <div class="text-center">⚙️<br>Settings</div>
-    </div>
+    updateDashboard();
+}
 
-    <script>
-        let trades = JSON.parse(localStorage.getItem('zellaTrades')) || [];
-        let chart;
+function updateDashboard(){
+    let total = trades.length;
+    let totalPnl = trades.reduce((a,b)=>a+b.pnl,0);
+    let totalR = trades.reduce((a,b)=>a+b.R,0);
 
-        function toggleForm() {
-            const modal = document.getElementById('tradeModal');
-            modal.classList.toggle('hidden');
-        }
+    document.getElementById("total").innerText = total;
+    document.getElementById("pnl").innerText = totalPnl.toFixed(2);
+    document.getElementById("totalR").innerText = totalR.toFixed(2);
+    document.getElementById("capital").innerText = (startingCapital + totalPnl).toFixed(2);
+}
+</script>
 
-        function saveTrade() {
-            const entry = parseFloat(document.getElementById('entry').value);
-            const exit = parseFloat(document.getElementById('exit').value);
-            const stop = parseFloat(document.getElementById('stop').value);
-            const size = parseFloat(document.getElementById('size').value);
-            const symbol = document.getElementById('symbol').value;
-            const setup = document.getElementById('setup').value;
-            const fileInput = document.getElementById('imageInput');
-
-            // Math Logic
-            const pnl = (exit - entry) * size;
-            const riskPerShare = Math.abs(entry - stop);
-            const rMultiple = riskPerShare !== 0 ? (pnl / (riskPerShare * size)).toFixed(2) : 0;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const trade = {
-                    symbol, setup, pnl, rMultiple, 
-                    img: e.target.result, 
-                    date: new Date().toLocaleDateString()
-                };
-                trades.unshift(trade);
-                localStorage.setItem('zellaTrades', JSON.stringify(trades));
-                toggleForm();
-                render();
-            };
-
-            if (fileInput.files[0]) {
-                reader.readAsDataURL(fileInput.files[0]);
-            } else {
-                reader.onload({ target: { result: null } });
-            }
-        }
-
-        function render() {
-            const container = document.getElementById('tradeContainer');
-            container.innerHTML = '';
-            let totalPnl = 0;
-            let totalR = 0;
-            let chartPoints = [0];
-
-            trades.forEach(t => {
-                totalPnl += t.pnl;
-                totalR += parseFloat(t.rMultiple);
-                chartPoints.push(totalPnl);
-
-                container.innerHTML += `
-                    <div class="zella-card p-4 flex flex-col gap-3">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <h3 class="font-bold text-lg">${t.symbol}</h3>
-                                <span class="bg-gray-800 text-[10px] px-2 py-1 rounded text-gray-400 uppercase">${t.setup}</span>
-                            </div>
-                            <div class="text-right">
-                                <p class="${t.pnl >= 0 ? 'text-green-400' : 'text-red-400'} font-bold">$${t.pnl.toFixed(2)}</p>
-                                <p class="text-xs text-blue-400">${t.rMultiple}R</p>
-                            </div>
-                        </div>
-                        ${t.img ? <img src="${t.img}" class="rounded-lg border border-gray-700 w-full h-32 object-cover"> : ''}
-                    </div>
-                `;
-            });
-
-            document.getElementById('netPl').innerText = $${totalPnl.toFixed(2)};
-            document.getElementById('netPl').className = text-2xl font-bold ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'};
-            document.getElementById('avgR').innerText = ${(totalR / (trades.length || 1)).toFixed(1)}R;
-
-            renderChart(chartPoints);
-        }
-
-        function renderChart(dataPoints) {
-            const ctx = document.getElementById('equityChart').getContext('2d');
-            if (chart) chart.destroy();
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: dataPoints.map((_, i) => i),
-                    datasets: [{
-                        data: dataPoints,
-                        borderColor: '#a78bfa',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        fill: true,
-                        backgroundColor: 'rgba(167, 139, 250, 0.05)'
-                    }]
-                },
-                options: { plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: '#27272a' } } } }
-            });
-        }
-
-        render();
-    </script>
 </body>
 </html>
+"""
+
+html_path="/mnt/data/Ajay_Trading_Journal_App.html"
+with open(html_path,"w") as f:
+    f.write(html_content)
+
+excel_path, html_path
